@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { getDemoRun, startDemoRun } from "../api/demo";
 import LiveDemoDashboard from "../components/LiveDemoDashboard";
-import Card from "../components/ui/Card";
+import Card from "../components/ui/card";
 import { useDemoStream } from "../hooks/useDemoStream";
 import type { DemoRunState } from "../types/api";
 

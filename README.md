@@ -248,7 +248,7 @@ docker compose logs -f
    - Eisenstadt 30%
    - Wiener Neustadt 20%
 6. Review the final checkpoint URI and phase table.
-7. Click `Export Digital Certificate` to download the signed JSON certificate.
+7. Click `Export Digital Certificate` to download the signed JSON certificate, or `Export JWT Certificate` to download a signed `.jwt` file.
 
 ## Digital Certificate Export
 
@@ -256,6 +256,12 @@ Completed demo runs can be exported as signed JSON certificates from the final r
 
 ```http
 GET /api/demo-runs/{demo_run_id}/certificate
+```
+
+The same certificate payload can also be downloaded as an HS256-signed JWT:
+
+```http
+GET /api/demo-runs/{demo_run_id}/certificate.jwt
 ```
 
 The endpoint is protected by the same HttpOnly-cookie session as the demo APIs. It only exports certificates for runs with status `COMPLETED`.
@@ -272,6 +278,17 @@ The certificate includes:
 - integrity fields: `payload_sha256`, `signature_algorithm`, `signature`
 
 Signing uses HMAC-SHA256. The backend first canonicalizes the certificate payload, hashes it into `payload_sha256`, and then signs the canonical signed payload with `CERTIFICATE_SIGNING_SECRET`. The raw signing secret is never exposed to the browser and must not be committed.
+
+The JWT export uses the standard JWT compact serialization with this header:
+
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+It is signed with the same `CERTIFICATE_SIGNING_SECRET` and is returned as `text/plain` with filename `sustainable-ai-certificate-run-{demo_run_id}.jwt`.
 
 If a phase or final `output_checkpoint_s3_uri` is missing but a `training_run_id` exists, the backend derives the expected URI as:
 
@@ -308,6 +325,7 @@ Demo:
 - `GET /api/demo-runs/{demo_run_id}`
 - `GET /api/demo-runs/{demo_run_id}/events`
 - `GET /api/demo-runs/{demo_run_id}/certificate`
+- `GET /api/demo-runs/{demo_run_id}/certificate.jwt`
 - `GET /api/demo-runs/stream`
 - `POST /api/demo-runs/reset-stale`
 - `GET /api/system/sites`

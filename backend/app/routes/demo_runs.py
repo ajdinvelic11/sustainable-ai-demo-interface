@@ -169,3 +169,27 @@ def export_demo_certificate(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{demo_run_id}/certificate.jwt")
+def export_demo_certificate_jwt(
+    demo_run_id: int,
+    settings: Annotated[Settings, Depends(get_settings)],
+    _: Annotated[AuthUser, Depends(require_user)],
+) -> Response:
+    with db_connection() as conn:
+        service = CertificateService(conn, settings)
+        try:
+            certificate = service.generate_certificate(demo_run_id)
+            jwt_certificate = service.to_jwt(certificate)
+        except MigrationRequiredError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        except CertificateError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    filename = f"sustainable-ai-certificate-run-{demo_run_id}.jwt"
+    return Response(
+        content=jwt_certificate,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

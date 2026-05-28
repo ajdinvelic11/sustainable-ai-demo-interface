@@ -2,7 +2,7 @@ import { MapPin, Play } from "lucide-react";
 
 import type { DemoPhase } from "../types/api";
 import StatusPill from "./StatusPill";
-import Card from "./ui/Card";
+import Card from "./ui/card";
 
 export default function CurrentSiteCard({ phase }: { phase?: DemoPhase | null }) {
   return (

@@ -1,7 +1,7 @@
 import { TerminalSquare } from "lucide-react";
 
 import type { DemoEvent } from "../types/api";
-import Card from "./ui/Card";
+import Card from "./ui/card";
 import StatusPill from "./StatusPill";
 
 export default function EventLog({ events }: { events: DemoEvent[] }) {

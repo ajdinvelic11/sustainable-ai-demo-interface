@@ -1,12 +1,12 @@
-import { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import clsx from "clsx";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
-  children: ReactNode;
+  children?: ReactNode;
 }
 
-export default function Button({ variant = "primary", className, children, ...props }: ButtonProps) {
+function Button({ variant = "primary", className, children, ...props }: ButtonProps) {
   const classes = {
     primary: "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-950/30",
     secondary: "border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800",
@@ -26,3 +26,6 @@ export default function Button({ variant = "primary", className, children, ...pr
     </button>
   );
 }
+
+export { Button };
+export default Button;

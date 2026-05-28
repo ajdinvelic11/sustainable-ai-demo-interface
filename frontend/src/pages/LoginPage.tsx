@@ -4,8 +4,8 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import Button from "../components/ui/Button";
-import Card from "../components/ui/Card";
+import Button from "../components/ui/button";
+import Card from "../components/ui/card";
 
 const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 

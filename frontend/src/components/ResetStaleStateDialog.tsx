@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, RefreshCcw, X } from "lucide-react";
 
-import Button from "./ui/Button";
+import Button from "./ui/button";
 
 interface ResetStaleStateDialogProps {
   open: boolean;

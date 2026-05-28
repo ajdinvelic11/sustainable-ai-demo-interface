@@ -1,6 +1,6 @@
 import type { SiteInfo } from "../types/api";
 import SiteCard from "./SiteCard";
-import Card from "./ui/Card";
+import Card from "./ui/card";
 
 interface SiteStatusCardsProps {
   sites: SiteInfo[];

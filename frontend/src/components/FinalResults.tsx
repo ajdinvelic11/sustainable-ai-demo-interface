@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { CheckCircle2, Copy, FileDown, RotateCcw } from "lucide-react";
+import { CheckCircle2, Copy, FileDown, KeyRound, RotateCcw } from "lucide-react";
 
-import { exportDemoCertificate } from "../api/demo";
+import { exportDemoCertificate, exportDemoCertificateJwt } from "../api/demo";
 import type { DemoRunState } from "../types/api";
 import StatusPill from "./StatusPill";
-import Button from "./ui/Button";
-import Card from "./ui/Card";
+import Button from "./ui/button";
+import Card from "./ui/card";
 
 interface FinalResultsProps {
   run: DemoRunState;
@@ -14,14 +14,20 @@ interface FinalResultsProps {
 
 export default function FinalResults({ run, onStartNew }: FinalResultsProps) {
   const finalUri = run.final_result.final_checkpoint_s3_uri;
-  const [exporting, setExporting] = useState(false);
+  const [exportingJson, setExportingJson] = useState(false);
+  const [exportingJwt, setExportingJwt] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const exportCertificate = async () => {
+  const downloadCertificate = async (kind: "json" | "jwt") => {
     setExportError(null);
-    setExporting(true);
+    if (kind === "json") {
+      setExportingJson(true);
+    } else {
+      setExportingJwt(true);
+    }
     try {
-      const { blob, filename } = await exportDemoCertificate(run.demo_run_id);
+      const { blob, filename } =
+        kind === "json" ? await exportDemoCertificate(run.demo_run_id) : await exportDemoCertificateJwt(run.demo_run_id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -33,7 +39,11 @@ export default function FinalResults({ run, onStartNew }: FinalResultsProps) {
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Certificate export failed.");
     } finally {
-      setExporting(false);
+      if (kind === "json") {
+        setExportingJson(false);
+      } else {
+        setExportingJwt(false);
+      }
     }
   };
 
@@ -49,9 +59,13 @@ export default function FinalResults({ run, onStartNew }: FinalResultsProps) {
           <p className="mt-3 break-all font-mono text-sm text-emerald-50">{finalUri || "Final checkpoint URI not available yet."}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" onClick={exportCertificate} disabled={exporting}>
+          <Button variant="secondary" onClick={() => downloadCertificate("json")} disabled={exportingJson || exportingJwt}>
             <FileDown className="h-4 w-4" />
-            {exporting ? "Exporting..." : "Export Digital Certificate"}
+            {exportingJson ? "Exporting..." : "Export Digital Certificate"}
+          </Button>
+          <Button variant="secondary" onClick={() => downloadCertificate("jwt")} disabled={exportingJson || exportingJwt}>
+            <KeyRound className="h-4 w-4" />
+            {exportingJwt ? "Exporting..." : "Export JWT Certificate"}
           </Button>
           <Button variant="secondary" disabled={!finalUri} onClick={() => finalUri && navigator.clipboard.writeText(finalUri)}>
             <Copy className="h-4 w-4" />

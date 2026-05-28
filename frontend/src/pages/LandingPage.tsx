@@ -7,9 +7,9 @@ import { getCurrentDemoRun, getSites, resetStaleDemoState, startDemoRun } from "
 import ResetStaleStateDialog from "../components/ResetStaleStateDialog";
 import SiteStatusCards from "../components/SiteStatusCards";
 import StatusPill from "../components/StatusPill";
-import Button from "../components/ui/Button";
-import Card from "../components/ui/Card";
-import Progress from "../components/ui/Progress";
+import Button from "../components/ui/button";
+import Card from "../components/ui/card";
+import Progress from "../components/ui/progress";
 import { useAuth } from "../context/AuthContext";
 import type { CurrentDemoResponse, SiteInfo } from "../types/api";
 

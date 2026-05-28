@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -28,7 +29,7 @@ class CertificateNotReadyError(CertificateError):
 
 
 class CertificateConfigurationError(CertificateError):
-    status_code = 503
+    status_code = 500
 
 
 class CertificateService:
@@ -86,6 +87,20 @@ class CertificateService:
 
     def to_pretty_json(self, certificate: dict[str, Any]) -> str:
         return json.dumps(certificate, default=self._json_value, indent=2, sort_keys=True) + "\n"
+
+    def to_jwt(self, certificate: dict[str, Any]) -> str:
+        if not self.settings.certificate_signing_secret:
+            raise CertificateConfigurationError("CERTIFICATE_SIGNING_SECRET is not configured.")
+        header = {"alg": "HS256", "typ": "JWT"}
+        encoded_header = self._base64url_json(header)
+        encoded_payload = self._base64url_json(certificate)
+        signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
+        signature = hmac.new(
+            self.settings.certificate_signing_secret.encode("utf-8"),
+            signing_input,
+            hashlib.sha256,
+        ).digest()
+        return f"{encoded_header}.{encoded_payload}.{self._base64url_bytes(signature)}"
 
     def _get_run(self, demo_run_id: int) -> dict[str, Any]:
         self.repo.ensure_ui_tables()
@@ -289,6 +304,12 @@ class CertificateService:
 
     def _canonical_json(self, payload: dict[str, Any]) -> str:
         return json.dumps(payload, default=self._json_value, sort_keys=True, separators=(",", ":"))
+
+    def _base64url_json(self, payload: dict[str, Any]) -> str:
+        return self._base64url_bytes(self._canonical_json(payload).encode("utf-8"))
+
+    def _base64url_bytes(self, payload: bytes) -> str:
+        return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
     def _pick(self, row: dict[str, Any] | None, *names: str) -> Any:
         if not row:

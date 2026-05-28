@@ -1,11 +1,11 @@
 import clsx from "clsx";
 
 interface ProgressProps {
-  value: number;
+  value?: number;
   className?: string;
 }
 
-export default function Progress({ value, className }: ProgressProps) {
+function Progress({ value = 0, className }: ProgressProps) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className={clsx("h-3 overflow-hidden rounded-full bg-slate-800", className)}>
@@ -16,3 +16,6 @@ export default function Progress({ value, className }: ProgressProps) {
     </div>
   );
 }
+
+export { Progress };
+export default Progress;

@@ -29,9 +29,17 @@ export function resetStaleDemoState(failOpenCommands: boolean) {
 }
 
 export async function exportDemoCertificate(demoRunId: number): Promise<{ blob: Blob; filename: string }> {
+  return downloadDemoCertificate(`/api/demo-runs/${demoRunId}/certificate`, `sustainable-ai-training-certificate-${demoRunId}.json`);
+}
+
+export async function exportDemoCertificateJwt(demoRunId: number): Promise<{ blob: Blob; filename: string }> {
+  return downloadDemoCertificate(`/api/demo-runs/${demoRunId}/certificate.jwt`, `sustainable-ai-certificate-run-${demoRunId}.jwt`);
+}
+
+async function downloadDemoCertificate(path: string, fallbackFilename: string): Promise<{ blob: Blob; filename: string }> {
   let response: Response;
   try {
-    response = await fetch(apiUrl(`/api/demo-runs/${demoRunId}/certificate`), {
+    response = await fetch(apiUrl(path), {
       method: "GET",
       credentials: "include",
     });
@@ -50,6 +58,6 @@ export async function exportDemoCertificate(demoRunId: number): Promise<{ blob: 
   const match = disposition.match(/filename="?([^";]+)"?/i);
   return {
     blob: await response.blob(),
-    filename: match?.[1] || `sustainable-ai-training-certificate-${demoRunId}.json`,
+    filename: match?.[1] || fallbackFilename,
   };
 }

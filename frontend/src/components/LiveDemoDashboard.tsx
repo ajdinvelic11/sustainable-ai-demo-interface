@@ -9,8 +9,8 @@ import FinalResultsPanel from "./FinalResultsPanel";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import PhaseTimeline from "./PhaseTimeline";
 import StatusPill from "./StatusPill";
-import Card from "./ui/Card";
-import Progress from "./ui/Progress";
+import Card from "./ui/card";
+import Progress from "./ui/progress";
 
 interface LiveDemoDashboardProps {
   run: DemoRunState;

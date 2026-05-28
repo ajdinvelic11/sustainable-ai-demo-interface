@@ -1,8 +1,8 @@
 import { Copy, Database, PackageCheck } from "lucide-react";
 
 import type { DemoRunState } from "../types/api";
-import Button from "./ui/Button";
-import Card from "./ui/Card";
+import Button from "./ui/button";
+import Card from "./ui/card";
 
 function copy(value?: string | null) {
   if (value) {

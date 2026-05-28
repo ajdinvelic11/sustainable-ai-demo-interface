@@ -2,7 +2,7 @@ import { MapPin, Server } from "lucide-react";
 
 import type { SiteInfo } from "../types/api";
 import StatusPill from "./StatusPill";
-import Card from "./ui/Card";
+import Card from "./ui/card";
 
 export default function SiteCard({ site }: { site: SiteInfo }) {
   return (

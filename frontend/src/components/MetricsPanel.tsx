@@ -1,7 +1,7 @@
 import { Activity, Gauge, Target } from "lucide-react";
 
 import type { LiveMetrics } from "../types/api";
-import Card from "./ui/Card";
+import Card from "./ui/card";
 
 function formatMetric(value?: number | null, digits = 3) {
   if (value === null || value === undefined) return "n/a";

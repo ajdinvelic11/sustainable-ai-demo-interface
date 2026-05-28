@@ -2,7 +2,7 @@ import { BrainCircuit, LogOut, RadioTower, ShieldCheck } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
-import Button from "./ui/Button";
+import Button from "./ui/button";
 
 export default function NavBar() {
   const { user, config, logout } = useAuth();
