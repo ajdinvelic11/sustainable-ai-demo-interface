@@ -1,107 +1,152 @@
 # Sustainable AI Demo Interface
 
-Production-ready demo web interface for the Sustainable AI multi-site training workflow. The app lets a presenter log in with a JWT / VC-JWT token, start a fixed 5-minute training chain, monitor live PostgreSQL metrics, and view final S3 checkpoint results.
+Production-quality demo web interface for a Sustainable AI hackathon presentation. The application provides a professional control room UI for logging in with a JWT / VC-JWT, starting a fixed five-minute multi-site training demo, watching live PostgreSQL-backed training progress, and reviewing final S3 checkpoint results.
+
+The repository is designed to be pushed to GitHub, cloned on an AWS EC2 VM, configured with environment variables, and run with Docker Compose.
+
+## Project Overview
+
+The interface orchestrates your existing Sustainable AI training backend instead of replacing it.
+
+It reuses:
+
+- `ml_ops.edge_training_commands`
+- `ml_ops.manual_training_chain_tests` when compatible
+- `ml_ops.manual_training_chain_phases` when compatible
+- `ml_ops.training_live_metrics`
+- `ml_ops.vw_training_live_latest_metrics`
+- existing model result or artifact fields if present on command/metric rows
+
+The demo run sequence is fixed:
+
+| Phase | Site | Region | Target | Duration |
+| --- | --- | --- | --- | --- |
+| 1 | Wiener Neustadt | `region_2` | 20% | 60s |
+| 2 | Wien | `region_1` | 30% | 90s |
+| 3 | Eisenstadt | `region_3` | 30% | 90s |
+| 4 | Wiener Neustadt | `region_2` | 20% | 60s |
+
+Total: 100%, 300 seconds.
 
 ## Architecture
 
-- **Frontend:** React, Vite, TypeScript, Tailwind CSS, lucide-react, Recharts.
-- **Backend:** FastAPI, Pydantic, psycopg, Server-Sent Events.
-- **Database:** Reuses `ml_ops.edge_training_commands`, `ml_ops.manual_training_chain_tests`, `ml_ops.manual_training_chain_phases`, `ml_ops.training_live_metrics`, and `ml_ops.vw_training_live_latest_metrics` when available.
-- **Demo tables:** Adds `ml_ops.demo_ui_runs` and `ml_ops.demo_ui_events` for UI state and event history.
-- **Deployment:** Docker Compose with backend, frontend, and Nginx reverse proxy exposed on `30080`.
+- Frontend: React, Vite, TypeScript, Tailwind CSS, lucide-react
+- Backend: FastAPI, Pydantic, psycopg 3, httpx, PyJWT
+- Database: existing PostgreSQL database `sustainable_ai_weather`
+- Artifacts: existing S3 bucket `weather-data-intelligent-ai-training`
+- Auth: external VC-JWT compliance validation, then internal short-lived application session JWT in an HttpOnly cookie
+- Certificates: signed JSON export for completed Sustainable AI training runs
+- Live updates: Server-Sent Events from FastAPI to the browser
+- Deployment: backend container, frontend container, Nginx reverse proxy on port `30080`
 
-The backend does not redesign the existing training system. It writes compatible pending commands to PostgreSQL and reads command status, live metrics, and checkpoint output from PostgreSQL.
+## Repository Structure
 
-## Demo Flow
-
-1. Open `http://<EC2_PUBLIC_IP>:30080/`.
-2. Paste a JWT / VC-JWT token and log in.
-3. Click **Start Demo Run**.
-4. Watch the phase sequence:
-   - Phase 1: Wiener Neustadt, `region_2`, 20%, 60 seconds
-   - Phase 2: Wien, `region_1`, 30%, 90 seconds
-   - Phase 3: Eisenstadt, `region_3`, 30%, 90 seconds
-   - Phase 4: Wiener Neustadt, `region_2`, 20%, 60 seconds
-5. View final metrics and the final checkpoint S3 URI.
+```text
+sustainable-ai-demo-interface/
+|-- frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- pages/
+|   |   |-- api/
+|   |   |-- hooks/
+|   |   |-- types/
+|   |   `-- main.tsx
+|   |-- package.json
+|   |-- vite.config.ts
+|   |-- tailwind.config.ts
+|   `-- Dockerfile
+|-- backend/
+|   |-- app/
+|   |   |-- main.py
+|   |   |-- config.py
+|   |   |-- auth/
+|   |   |-- db/
+|   |   |-- routes/
+|   |   |-- services/
+|   |   |-- schemas/
+|   |   `-- utils/
+|   |-- sql/
+|   |   |-- 001_demo_ui_tables.sql
+|   |   `-- 002_demo_ui_indexes.sql
+|   |-- requirements.txt
+|   `-- Dockerfile
+|-- deploy/
+|   |-- nginx.conf
+|   `-- caddy/
+|-- docker-compose.yml
+|-- .env.example
+|-- README.md
+`-- Makefile
+```
 
 ## Prerequisites
 
-- Docker and Docker Compose on the deployment VM.
-- Network access from the VM to PostgreSQL.
-- Existing Sustainable AI edge agents polling `ml_ops.edge_training_commands`.
-- PostgreSQL credentials supplied through `.env`.
-- VC-JWT validation endpoint configured, or explicit mock mode for local/demo fallback.
-
-## Local Development
-
-Copy the environment file:
-
-```bash
-cp .env.example .env
-```
-
-Install backend dependencies:
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Install frontend dependencies:
-
-```bash
-cd frontend
-npm install
-```
-
-Run migrations:
-
-```bash
-cd backend
-python -m app.db.migrate
-```
-
-Start the backend:
-
-```bash
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Start the frontend:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Open `http://localhost:5173/`.
+- Docker and Docker Compose
+- Git
+- Network access from EC2 to PostgreSQL/RDS
+- Network access from EC2 to the VC-JWT validation endpoint
+- Security Group inbound rule for TCP `30080`
+- PostgreSQL user with permission to:
+  - read `ml_ops` tables/views
+  - insert/update `ml_ops.edge_training_commands`
+  - create/read/update `ml_ops.demo_ui_runs`
+  - create/read `ml_ops.demo_ui_events`
 
 ## Environment Variables
 
-- `APP_ENV`: Use `production` on EC2.
-- `APP_PUBLIC_URL`: Public URL, for example `http://<EC2_PUBLIC_IP>:30080`.
-- `APP_JWT_SECRET`: Required. Change this before production.
-- `APP_ADMIN_SUBJECTS`: Comma-separated subjects allowed to reset stale runs.
-- `SESSION_COOKIE_NAME`: HttpOnly cookie name for the app session.
-- `CORS_ALLOWED_ORIGINS`: Comma-separated frontend origins.
-- `VC_JWT_VALIDATION_ENABLED`: Enables external VC-JWT validation.
-- `VC_JWT_VALIDATION_MOCK_MODE`: Accepts tokens without external validation when `true`. The UI displays **Demo Auth Mode**.
-- `VC_JWT_VALIDATION_URL`: Default documented endpoint is `https://gxdch-nas-basic-functions.cloudcarib.com/api/jwt/compliance-verification`.
-- `VC_JWT_VALIDATION_CONTENT_TYPE`: Default is `application/vc+jwt`.
-- `VC_JWT_VALIDATION_EXPECTED_COMPLIANT_FIELD`: If the response JSON includes this field, it must be true.
-- `DB_*`: PostgreSQL connection settings.
-- `DEMO_*`: Model ID, version, timing, polling, and edge command type.
-- `SITE_*`: Site names and region codes.
-- `S3_BUCKET`: Artifact bucket name.
+Copy `.env.example` to `.env`.
+
+Important variables:
+
+- `APP_PUBLIC_URL`: public URL, for example `http://<EC2_PUBLIC_IP>:30080`
+- `APP_JWT_SECRET`: long random secret for internal app sessions
+- `APP_ADMIN_SUBJECTS`: comma-separated credential subjects allowed to reset stale state
+- `SESSION_COOKIE_NAME`: HttpOnly cookie name
+- `CORS_ALLOWED_ORIGINS`: allowed frontend origins
+- `VC_JWT_VALIDATION_URL`: external Gaia-X validation endpoint
+- `VC_JWT_VALIDATION_MOCK_MODE`: local emergency/demo mode only
+- `DB_*`: PostgreSQL settings
+- `DEMO_*`: orchestration behavior
+- `SITE_*`: configured training sites
+- `S3_BUCKET`: checkpoint bucket name
+- `CERTIFICATE_SIGNING_SECRET`: long random HMAC secret used to sign exported JSON certificates
+- `CERTIFICATE_ISSUER`: issuer name embedded in exported certificates
+
+## Authentication
+
+The login page accepts a JWT / VC-JWT. The backend validates it as follows:
+
+1. Validate basic JWT shape.
+2. Decode claims locally only for display/session metadata.
+3. If `VC_JWT_VALIDATION_MOCK_MODE=true`, accept the token and show "Demo Auth Mode" in the UI.
+4. Otherwise call the external validation API configured via `VC_JWT_VALIDATION_URL`.
+5. The external request uses:
+
+```http
+POST /api/jwt/compliance-verification
+Content-Type: application/vc+jwt
+
+<raw VC-JWT>
+```
+
+The Swagger UI for the referenced Gaia-X Basic Functions service documents a `201` response for the compliance verification endpoint. The backend therefore treats 2xx responses as success unless a configured JSON compliant field is present and false.
+
+After successful validation, the backend creates an internal short-lived app session JWT and sets it as an HttpOnly cookie. The raw JWT / VC-JWT is not stored in the browser.
+
+## CSRF Handling
+
+Because the app uses an HttpOnly cookie, mutating API calls use an in-memory CSRF token returned by `/api/auth/me` or `/api/auth/verify`. The frontend sends it as `X-CSRF-Token` for `POST` requests. The token is not stored in localStorage.
 
 ## Database Migrations
 
-Run:
+The app starts even if demo UI tables are missing, but demo endpoints return a clear migration-required response until migrations are applied.
+
+Apply migrations:
 
 ```bash
+cp .env.example .env
+# edit .env first
+docker compose build backend
 docker compose run --rm backend python -m app.db.migrate
 ```
 
@@ -109,174 +154,228 @@ The migrations create:
 
 - `ml_ops.demo_ui_runs`
 - `ml_ops.demo_ui_events`
-- indexes for status, created time, and event lookup
+- indexes for run status and event history
 
-If these tables are missing, the app still starts and `/health` works, but starting a demo returns a setup warning until migrations are applied.
+No historical runs are deleted. No S3 artifacts are deleted.
 
-## AWS EC2 Deployment
+## Local Development
 
-1. Launch an EC2 instance with Docker installed.
-2. Allow inbound TCP `30080` from your demo audience IP range in the Security Group.
-3. Clone the repository:
+Backend:
 
 ```bash
-git clone <your-repo-url>
-cd sustainable-ai-demo-interface
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-4. Create `.env`:
+Frontend:
 
 ```bash
+cd frontend
+npm install
 cp .env.example .env
-nano .env
+npm run dev
 ```
 
-5. Set real values for `APP_PUBLIC_URL`, `APP_JWT_SECRET`, `DB_PASSWORD`, and VC-JWT validation.
-6. Run migrations:
-
-```bash
-docker compose run --rm backend python -m app.db.migrate
-```
-
-7. Start the stack:
-
-```bash
-docker compose up -d --build
-```
-
-8. Follow logs:
-
-```bash
-docker compose logs -f
-```
-
-Open `http://<EC2_PUBLIC_IP>:30080/`.
-
-## Docker Compose
-
-Services:
-
-- `backend`: FastAPI on internal port `8000`.
-- `frontend`: Built React static assets served by Nginx on internal port `80`.
-- `reverse-proxy`: Nginx exposed as host port `30080`.
-
-Useful commands:
-
-```bash
-docker compose ps
-docker compose logs -f backend
-docker compose restart backend
-docker compose down
-```
-
-## Authentication
-
-The login page accepts a pasted JWT / VC-JWT token. The backend posts the raw token to the configured validation endpoint using `Content-Type: application/vc+jwt`. The public Swagger metadata identifies the compliance endpoint as:
-
-```text
-POST /api/jwt/compliance-verification
-operationId: JWTController_verifyComplianceVc
-```
-
-When validation succeeds, the backend creates a short-lived internal app JWT and stores it in a secure HttpOnly cookie. Demo API endpoints require this app session. Logout clears the cookie.
-
-Cookie auth uses `SameSite=Lax`, HttpOnly cookies, JSON-only state-changing endpoints, and explicit confirmation for stale reset. For internet-facing production, use HTTPS with a domain and restrict origins.
-
-## Mock Auth Mode
-
-Set:
+For local auth without the external service:
 
 ```env
 VC_JWT_VALIDATION_MOCK_MODE=true
 ```
 
-The backend logs this clearly and the UI displays **Demo Auth Mode**. Do not use mock mode for production.
+Use a syntactically valid three-part JWT. If you need admin reset locally, set `APP_ADMIN_SUBJECTS` to the `sub` claim of that token.
 
-## Resetting Stale Runs
+## Docker Compose Deployment
 
-Only admins can reset stale demo state. Configure admins with:
-
-```env
-APP_ADMIN_SUBJECTS=subject-1,subject-2
+```bash
+cp .env.example .env
+# edit .env
+docker compose up --build -d
+docker compose logs -f
 ```
 
-Reset marks active demo UI runs as `FAILED`. The confirmation flow can also mark open edge commands with `PENDING`, `PICKED_UP`, or `RUNNING` as `FAILED`. Historical runs and S3 artifacts are never deleted.
+Open:
 
-## VC-JWT Configuration
-
-Default adapter behavior:
-
-- Method: `POST`
-- Body: raw token string
-- Content-Type: `application/vc+jwt`
-- Success: any 2xx response is accepted unless the configured compliance field is present and false.
-
-If the external API changes, update:
-
-```env
-VC_JWT_VALIDATION_URL=
-VC_JWT_VALIDATION_CONTENT_TYPE=
-VC_JWT_VALIDATION_EXPECTED_COMPLIANT_FIELD=
+```text
+http://localhost:30080/
 ```
+
+On EC2:
+
+```text
+http://<EC2_PUBLIC_IP>:30080/
+```
+
+## AWS EC2 Deployment Steps
+
+1. Launch an EC2 VM, for example Ubuntu 22.04 or 24.04.
+2. Open Security Group inbound TCP `30080` from your demo audience IP range.
+3. Ensure outbound access to RDS and the VC-JWT validator.
+4. Install Docker and Git.
+5. Clone this repository.
+6. Copy `.env.example` to `.env`.
+7. Set `APP_PUBLIC_URL=http://<EC2_PUBLIC_IP>:30080`.
+8. Set real DB credentials.
+9. Set `APP_JWT_SECRET` to a long random value.
+10. Keep `VC_JWT_VALIDATION_MOCK_MODE=false` for production-like demos.
+11. Run migrations.
+12. Start Docker Compose.
+
+Example:
+
+```bash
+git clone <your-repo-url>
+cd sustainable-ai-demo-interface
+cp .env.example .env
+nano .env
+docker compose build
+docker compose run --rm backend python -m app.db.migrate
+docker compose up -d
+docker compose logs -f
+```
+
+## How To Start The Demo
+
+1. Open the UI.
+2. Paste a valid JWT / VC-JWT.
+3. Click `Verify & Login`.
+4. Click `Start Demo Run`.
+5. Watch the live dashboard:
+   - Wiener Neustadt 20%
+   - Wien 30%
+   - Eisenstadt 30%
+   - Wiener Neustadt 20%
+6. Review the final checkpoint URI and phase table.
+7. Click `Export Digital Certificate` to download the signed JSON certificate.
+
+## Digital Certificate Export
+
+Completed demo runs can be exported as signed JSON certificates from the final results screen or through:
+
+```http
+GET /api/demo-runs/{demo_run_id}/certificate
+```
+
+The endpoint is protected by the same HttpOnly-cookie session as the demo APIs. It only exports certificates for runs with status `COMPLETED`.
+
+The certificate includes:
+
+- certificate metadata: `certificate_type`, `certificate_version`, `certificate_id`, `issued_at`, `issuer`
+- run metadata: `demo_run_id`, `demo_name`, `status`, `started_at`, `finished_at`
+- model metadata: `model_id`, `model_version`, `training_type`, `use_case`
+- final result: `final_training_run_id`, `final_checkpoint_s3_uri`
+- all available phase records from `ml_ops.manual_training_chain_phases`
+- command details from `ml_ops.edge_training_commands`
+- phase metrics: `map50`, `precision`, `recall`
+- integrity fields: `payload_sha256`, `signature_algorithm`, `signature`
+
+Signing uses HMAC-SHA256. The backend first canonicalizes the certificate payload, hashes it into `payload_sha256`, and then signs the canonical signed payload with `CERTIFICATE_SIGNING_SECRET`. The raw signing secret is never exposed to the browser and must not be committed.
+
+If a phase or final `output_checkpoint_s3_uri` is missing but a `training_run_id` exists, the backend derives the expected URI as:
+
+```text
+s3://{S3_BUCKET}/model-checkpoints/{DEMO_MODEL_ID}/{DEMO_MODEL_VERSION}/region_code={region_code}/location_name={location_name_with_underscores}/run_id={training_run_id}/last_checkpoint/last.pt
+```
+
+## Reset Stale Runs
+
+Only subjects listed in `APP_ADMIN_SUBJECTS` can reset stale state.
+
+The reset action:
+
+- marks active UI runs as `FAILED`
+- optionally marks open edge commands as `FAILED`
+- never deletes historical runs
+- never deletes S3 artifacts
+
+Use this if commands are stuck in `PENDING`, `PICKED_UP`, or `RUNNING` and you intentionally want to prepare a new demo.
+
+## Backend API
+
+Auth:
+
+- `POST /api/auth/verify`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/auth/config`
+
+Demo:
+
+- `POST /api/demo-runs/start`
+- `GET /api/demo-runs/current`
+- `GET /api/demo-runs/{demo_run_id}`
+- `GET /api/demo-runs/{demo_run_id}/events`
+- `GET /api/demo-runs/{demo_run_id}/certificate`
+- `GET /api/demo-runs/stream`
+- `POST /api/demo-runs/reset-stale`
+- `GET /api/system/sites`
+- `GET /health`
+- `GET /ready`
 
 ## Troubleshooting
 
-**DB connection failed**
+### DB connection failed
 
-- Check `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `DB_SSLMODE`.
-- Confirm the EC2 Security Group can reach the RDS Security Group.
-- Run `docker compose logs -f backend`.
+- Check `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSLMODE`.
+- Confirm EC2 can reach RDS Security Group.
+- Run `docker compose logs backend`.
+- Open `/ready` and check `database`.
 
-**Authentication failed**
+### Authentication failed
 
-- Confirm `VC_JWT_VALIDATION_URL` is reachable from the VM.
-- Confirm token type matches `VC_JWT_VALIDATION_CONTENT_TYPE`.
-- For emergency demo fallback, set `VC_JWT_VALIDATION_MOCK_MODE=true` and redeploy.
+- Check `VC_JWT_VALIDATION_URL`.
+- Confirm the token is a VC-JWT and not a JSON wrapper.
+- Confirm `VC_JWT_VALIDATION_MOCK_MODE=false` in production.
+- For emergency demo mode, set `VC_JWT_VALIDATION_MOCK_MODE=true` and restart containers.
 
-**No live metrics**
+### No live metrics
 
-- Confirm `ml_ops.vw_training_live_latest_metrics` or `ml_ops.training_live_metrics` exists.
-- Check that edge agents write `command_id`, `training_run_id`, progress, and metric columns.
+- Confirm edge agents write to `ml_ops.training_live_metrics`.
+- If `ml_ops.vw_training_live_latest_metrics` exists, the app prefers it.
+- Check whether rows contain `command_id` or `training_run_id` matching the active command.
 
-**Command stuck in RUNNING**
+### Command stuck in RUNNING
 
-- Inspect `ml_ops.edge_training_commands` for the current `command_id`.
-- Check the target edge agent logs.
+- Inspect `ml_ops.edge_training_commands`.
+- Check edge-agent logs on the relevant training site.
 - Use admin reset only after confirming the command is stale.
 
-**S3 checkpoint missing**
+### S3 checkpoint missing
 
-- Confirm the training container uploaded to `s3://weather-data-intelligent-ai-training/model-checkpoints/`.
-- Confirm the command row or result table records `output_checkpoint_s3_uri`, `final_checkpoint_s3_uri`, or `best_model_s3_uri`.
+- Confirm the training container uploads to `s3://weather-data-intelligent-ai-training/model-checkpoints/`.
+- Confirm the command row or result payload includes a checkpoint URI field.
+- The UI looks for common fields such as `output_checkpoint_s3_uri`, `final_checkpoint_s3_uri`, `checkpoint_s3_uri`, and `best_model_s3_uri`.
+- Certificate export derives the expected checkpoint URI from `S3_BUCKET`, `DEMO_MODEL_ID`, `DEMO_MODEL_VERSION`, `region_code`, `location_name`, and `training_run_id` when the DB field is missing.
 
-**Port 30080 not reachable**
+### Certificate export failed
 
-- Check `docker compose ps`.
-- Confirm EC2 inbound Security Group rule for TCP `30080`.
-- Confirm the host firewall allows the port.
+- Confirm the run status is `COMPLETED`.
+- Set `CERTIFICATE_SIGNING_SECRET` to a long random value and restart the backend.
+- Confirm the demo UI migrations are applied.
+- Check backend logs for certificate generation errors.
+
+### Port 30080 not reachable
+
+- Check EC2 Security Group inbound rule.
+- Run `docker compose ps`.
+- Check reverse proxy logs with `docker compose logs -f reverse-proxy`.
 
 ## HTTPS
 
-If you have a domain, point DNS to the EC2 public IP and use Caddy or Nginx with Let's Encrypt. A starter Caddyfile is in `deploy/caddy/Caddyfile`.
+If you have a domain, use Caddy or Nginx with Let's Encrypt. A sample Caddyfile is included under `deploy/caddy/`.
 
-If you only have an IP address, browser-trusted HTTPS is not available without a domain. Use HTTP for an internal demo or a self-signed certificate only when your audience can accept the browser warning.
+If you only have an IP address, browser-trusted HTTPS is not possible with Let's Encrypt. For an internal demo, use HTTP on `30080`, or use a self-signed certificate only if your audience can trust it manually.
 
 ## Security Notes
 
-- Never commit `.env`.
-- Change `APP_JWT_SECRET` before production.
-- Keep `VC_JWT_VALIDATION_MOCK_MODE=false` in production.
-- Use a least-privilege PostgreSQL user. If possible, grant only the required `ml_ops` read/write permissions.
-- Restrict the EC2 Security Group to known source IPs.
-- Use HTTPS with a domain for production or public demos.
-
-## Known Compatibility Behavior
-
-The existing scripts named in the project brief were not present in this workspace, so the backend uses defensive PostgreSQL schema introspection. It inserts only columns that exist in each target table and stores the command details in `command_payload`, `payload`, `metadata`, or `command_metadata` when those columns exist.
-
-If your edge agent expects a different `command_type`, set:
-
-```env
-DEMO_EDGE_COMMAND_TYPE=<expected-value>
-```
-
+- Do not commit `.env`.
+- Use a long random `APP_JWT_SECRET`.
+- Use a separate long random `CERTIFICATE_SIGNING_SECRET`.
+- Keep `VC_JWT_VALIDATION_MOCK_MODE=false` outside local/emergency demo mode.
+- Restrict EC2 Security Group ingress.
+- Prefer a least-privilege DB user for the UI.
+- Use HTTPS with a domain for production.
+- Raw JWT / VC-JWT tokens are not stored by the frontend.
+- S3 artifacts are never deleted by this app.

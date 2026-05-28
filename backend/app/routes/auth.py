@@ -1,65 +1,73 @@
-from __future__ import annotations
+from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from app.auth.session import clear_session_cookie, create_session_token, current_user_from_request, set_session_cookie
-from app.auth.vc_jwt import VcJwtValidationAdapter, claims_to_session_identity
-from app.config import Settings
-from app.routes.dependencies import get_settings_from_app
-from app.schemas.auth import AuthConfigResponse, AuthResponse, MeResponse, VerifyTokenRequest
+from app.auth.session import clear_session_cookie, create_session, decode_session, set_session_cookie
+from app.auth.vc_validator import CredentialValidationError, validate_vc_jwt
+from app.config import Settings, get_settings
+from app.schemas.auth import AuthConfigResponse, AuthResponse, AuthUser, LogoutResponse, VerifyRequest
 
-router = APIRouter(prefix="/api/auth", tags=["authentication"])
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.get("/config", response_model=AuthConfigResponse)
-def auth_config(settings: Settings = Depends(get_settings_from_app)) -> AuthConfigResponse:
+def auth_config(settings: Annotated[Settings, Depends(get_settings)]) -> AuthConfigResponse:
     return AuthConfigResponse(
         validation_enabled=settings.vc_jwt_validation_enabled,
         mock_mode=settings.vc_jwt_validation_mock_mode,
-        validation_url_configured=bool(settings.vc_jwt_validation_url and "CHANGE_ME" not in settings.vc_jwt_validation_url),
     )
 
 
 @router.post("/verify", response_model=AuthResponse)
-async def verify_token(
-    payload: VerifyTokenRequest,
-    response: Response,
-    settings: Settings = Depends(get_settings_from_app),
-) -> AuthResponse:
-    if settings.is_production and settings.app_jwt_secret == "change-me":
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="APP_JWT_SECRET must be changed in production.")
+async def verify(request: VerifyRequest, response: Response, settings: Annotated[Settings, Depends(get_settings)]) -> AuthResponse:
+    try:
+        result = await validate_vc_jwt(request.token, settings)
+    except CredentialValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
-    adapter = VcJwtValidationAdapter(settings)
-    result = await adapter.verify(payload.token.strip())
-    if not result.compliant:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=result.message)
-
-    identity = claims_to_session_identity(
-        settings,
-        result.claims,
-        "mock" if settings.vc_jwt_validation_mock_mode else "vc-jwt",
+    subject = result.claims.subject
+    user = AuthUser(
+        subject=subject,
+        issuer=result.claims.issuer,
+        credential_type=result.claims.credential_type,
+        is_admin=subject in settings.app_admin_subjects,
+        auth_mode=result.auth_mode,
     )
-    token, user = create_session_token(settings, identity)
-    set_session_cookie(settings, response, token)
+    token, csrf_token, expires_at = create_session(user, settings)
+    set_session_cookie(response, settings, token)
     return AuthResponse(
         authenticated=True,
         user=user,
-        demo_auth_mode=settings.vc_jwt_validation_mock_mode,
-        message=result.message,
+        csrf_token=csrf_token,
+        demo_auth_mode=settings.mock_auth_visible,
+        expires_at=expires_at,
     )
 
 
-@router.post("/logout")
-def logout(response: Response, settings: Settings = Depends(get_settings_from_app)) -> dict[str, bool]:
-    clear_session_cookie(settings, response)
-    return {"ok": True}
+@router.get("/me", response_model=AuthResponse)
+def me(request: Request, response: Response, settings: Annotated[Settings, Depends(get_settings)]) -> AuthResponse:
+    # Decode from the cookie manually so frontend boot receives authenticated=false
+    # instead of a hard 401 when no session exists.
+    token = request.cookies.get(settings.session_cookie_name)
+    if not token:
+        clear_session_cookie(response, settings)
+        return AuthResponse(authenticated=False, demo_auth_mode=settings.mock_auth_visible)
+    decoded = decode_session(token, settings)
+    if not decoded:
+        clear_session_cookie(response, settings)
+        return AuthResponse(authenticated=False, demo_auth_mode=settings.mock_auth_visible)
+    user, csrf_token = decoded
+    return AuthResponse(
+        authenticated=True,
+        user=user,
+        csrf_token=csrf_token,
+        demo_auth_mode=settings.mock_auth_visible,
+    )
 
 
-@router.get("/me", response_model=MeResponse)
-def me(request: Request, settings: Settings = Depends(get_settings_from_app)) -> MeResponse:
-    try:
-        user = current_user_from_request(settings, request)
-    except HTTPException:
-        return MeResponse(authenticated=False, user=None, demo_auth_mode=settings.vc_jwt_validation_mock_mode)
-    return MeResponse(authenticated=True, user=user, demo_auth_mode=settings.vc_jwt_validation_mock_mode)
-
+@router.post("/logout", response_model=LogoutResponse)
+def logout(response: Response, settings: Annotated[Settings, Depends(get_settings)]) -> LogoutResponse:
+    clear_session_cookie(response, settings)
+    return LogoutResponse()

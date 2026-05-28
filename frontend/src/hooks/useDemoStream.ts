@@ -1,31 +1,31 @@
 import { useEffect, useState } from "react";
-import { demoStreamUrl } from "../api/client";
-import type { DemoState } from "../types/api";
+
+import { apiUrl } from "../api/client";
+import type { CurrentDemoResponse } from "../types/api";
 
 export function useDemoStream(enabled: boolean) {
-  const [state, setState] = useState<DemoState | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [state, setState] = useState<CurrentDemoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    const eventSource = new EventSource(demoStreamUrl(), { withCredentials: true });
-    eventSource.addEventListener("open", () => {
+    const source = new EventSource(apiUrl("/api/demo-runs/stream"), { withCredentials: true });
+    source.addEventListener("open", () => {
       setConnected(true);
       setError(null);
     });
-    eventSource.addEventListener("demo-state", (event) => {
-      setState(JSON.parse(event.data) as DemoState);
+    source.addEventListener("state", (event) => {
+      setState(JSON.parse((event as MessageEvent).data));
     });
-    eventSource.addEventListener("error", () => {
+    source.addEventListener("error", () => {
       setConnected(false);
-      setError("Live stream is reconnecting.");
+      setError("Live stream disconnected. The dashboard will reconnect automatically.");
     });
-    return () => eventSource.close();
+    return () => source.close();
   }, [enabled]);
 
-  return { state, connected, error };
+  return { state, error, connected };
 }
-

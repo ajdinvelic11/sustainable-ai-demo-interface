@@ -1,32 +1,28 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { clsx } from "clsx";
+import { ButtonHTMLAttributes, ReactNode } from "react";
+import clsx from "clsx";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
-  icon?: ReactNode;
-};
+  children: ReactNode;
+}
 
-const variants = {
-  primary:
-    "bg-signal-cyan text-slate-950 hover:bg-cyan-300 shadow-[0_0_28px_rgba(24,211,255,0.22)] disabled:bg-slate-600 disabled:text-slate-300",
-  secondary: "bg-surface-panel text-slate-100 border border-surface-line hover:border-signal-blue",
-  danger: "bg-red-500/14 text-red-100 border border-red-400/40 hover:bg-red-500/22",
-  ghost: "bg-transparent text-slate-300 hover:text-white hover:bg-white/6"
-};
-
-export function Button({ className, variant = "primary", icon, children, ...props }: ButtonProps) {
+export default function Button({ variant = "primary", className, children, ...props }: ButtonProps) {
+  const classes = {
+    primary: "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-950/30",
+    secondary: "border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800",
+    danger: "bg-red-500 text-white hover:bg-red-400 shadow-lg shadow-red-950/30",
+    ghost: "text-slate-300 hover:bg-slate-800/80",
+  };
   return (
     <button
       className={clsx(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-signal-cyan/70 disabled:cursor-not-allowed disabled:opacity-70",
-        variants[variant],
-        className
+        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+        classes[variant],
+        className,
       )}
       {...props}
     >
-      {icon}
       {children}
     </button>
   );
 }
-

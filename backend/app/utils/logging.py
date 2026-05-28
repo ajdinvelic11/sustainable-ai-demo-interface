@@ -1,34 +1,50 @@
-from __future__ import annotations
-
 import logging
 import sys
-from datetime import datetime, timezone
-from typing import Any
 
 
-class JsonFormatter(logging.Formatter):
+class JsonLikeFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        import json
-
-        payload: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+        base = {
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-        for key, value in record.__dict__.items():
-            if key.startswith("_") and key not in payload:
-                payload[key[1:]] = value
-        return json.dumps(payload, default=str)
+            base["exc_info"] = self.formatException(record.exc_info)
+        extras = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key
+            not in {
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "taskName",
+            }
+        }
+        if extras:
+            base["extra"] = extras
+        return str(base)
 
 
-def configure_logging() -> None:
+def configure_logging(level: str) -> None:
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    root.setLevel(logging.INFO)
-
+    handler.setFormatter(JsonLikeFormatter())
+    logging.basicConfig(level=getattr(logging, level.upper(), logging.INFO), handlers=[handler], force=True)

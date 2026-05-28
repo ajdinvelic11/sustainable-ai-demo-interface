@@ -1,33 +1,35 @@
-.PHONY: help dev-backend dev-frontend migrate compose-up compose-down logs build
+.PHONY: help install-frontend build-frontend backend-check migrate up down logs ps
 
 help:
-	@echo "Targets:"
-	@echo "  migrate        Run PostgreSQL SQL migrations"
-	@echo "  dev-backend    Start FastAPI locally"
-	@echo "  dev-frontend   Start Vite locally"
-	@echo "  compose-up     Build and start Docker Compose stack"
-	@echo "  compose-down   Stop Docker Compose stack"
-	@echo "  logs           Follow Docker Compose logs"
-	@echo "  build          Build frontend and backend Docker images"
+	@echo "Sustainable AI Demo Interface"
+	@echo "  make install-frontend  Install frontend dependencies"
+	@echo "  make build-frontend    Build frontend"
+	@echo "  make backend-check     Python compile check"
+	@echo "  make migrate           Run DB migrations inside backend container"
+	@echo "  make up                Start Docker Compose stack"
+	@echo "  make down              Stop Docker Compose stack"
+	@echo "  make logs              Follow logs"
+
+install-frontend:
+	cd frontend && npm install
+
+build-frontend:
+	cd frontend && npm run build
+
+backend-check:
+	cd backend && python -m compileall -q app
 
 migrate:
-	cd backend && python -m app.db.migrate
+	docker compose run --rm backend python -m app.db.migrate
 
-dev-backend:
-	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+up:
+	docker compose up --build -d
 
-dev-frontend:
-	cd frontend && npm run dev
-
-compose-up:
-	docker compose up -d --build
-
-compose-down:
+down:
 	docker compose down
 
 logs:
 	docker compose logs -f
 
-build:
-	docker compose build
-
+ps:
+	docker compose ps

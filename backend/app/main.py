@@ -1,54 +1,45 @@
-from __future__ import annotations
-
-import logging
 from contextlib import asynccontextmanager
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.db import Database
-from app.routes import auth, demo
-from app.services.demo_orchestrator import DemoOrchestrator
+from app.config import Settings, get_settings
+from app.db.session import close_pool, db_connection, init_pool
+from app.routes import auth, demo_runs, system
+from app.services.demo_repository import DemoRepository
 from app.utils.logging import configure_logging
 
-configure_logging()
-logger = logging.getLogger(__name__)
+
+settings = get_settings()
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
-    db = Database(settings)
-    db.open()
-    orchestrator = DemoOrchestrator(db, settings)
-    app.state.settings = settings
-    app.state.db = db
-    app.state.orchestrator = orchestrator
-    if settings.vc_jwt_validation_mock_mode:
-        logger.warning("demo_auth_mode_enabled")
-    orchestrator.resume_active_runs()
+    init_pool()
     yield
-    db.close()
+    close_pool()
 
 
 app = FastAPI(
     title="Sustainable AI Demo Interface API",
     version="1.0.0",
+    description="Control-plane API for the Sustainable AI multi-site training demo.",
     lifespan=lifespan,
 )
 
-settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allowed_origins,
+    allow_origins=settings.cors_allowed_origins or [settings.app_public_url],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router)
-app.include_router(demo.router)
+app.include_router(demo_runs.router)
+app.include_router(system.router)
 
 
 @app.get("/health")
@@ -57,13 +48,16 @@ def health() -> dict[str, str]:
 
 
 @app.get("/ready")
-def ready() -> dict[str, object]:
-    db: Database = app.state.db
-    database_ok = db.ping()
-    return {
-        "status": "ready" if database_ok else "not_ready",
-        "database": database_ok,
-        "demo_ui_tables": db.relation_exists("ml_ops", "demo_ui_runs")
-        and db.relation_exists("ml_ops", "demo_ui_events"),
-    }
-
+def ready(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
+    db_ok = False
+    migrations_ok = False
+    try:
+        with db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 AS ok")
+                db_ok = cur.fetchone()["ok"] == 1
+            repo = DemoRepository(conn, settings)
+            migrations_ok = repo.ui_tables_available()
+    except Exception:
+        db_ok = False
+    return {"status": "ready" if db_ok else "not-ready", "database": db_ok, "demo_ui_tables": migrations_ok}

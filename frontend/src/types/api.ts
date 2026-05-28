@@ -1,37 +1,34 @@
-export type SessionUser = {
+export interface AuthUser {
   subject: string;
-  issuer?: string | null;
-  name?: string | null;
-  email?: string | null;
-  roles: string[];
+  issuer: string;
+  credential_type: string;
   is_admin: boolean;
-  auth_mode: string;
-  expires_at: string;
-};
+  auth_mode: "validated" | "mock" | string;
+}
 
-export type AuthConfig = {
+export interface AuthResponse {
+  authenticated: boolean;
+  user: AuthUser | null;
+  csrf_token: string | null;
+  demo_auth_mode: boolean;
+  expires_at?: string | null;
+}
+
+export interface AuthConfig {
   validation_enabled: boolean;
   mock_mode: boolean;
-  validation_url_configured: boolean;
-};
+}
 
-export type MeResponse = {
-  authenticated: boolean;
-  user: SessionUser | null;
-  demo_auth_mode: boolean;
-};
-
-export type SiteInfo = {
+export interface SiteInfo {
   location_name: string;
   region_code: string;
-  host?: string | null;
-  role?: string | null;
-  current_status?: string | null;
-  last_seen_at?: string | null;
-};
+  host_label: string;
+  role: string;
+  status: string;
+}
 
-export type DemoEvent = {
-  event_id?: number | null;
+export interface DemoEvent {
+  event_id: number;
   demo_run_id: number;
   event_type: string;
   severity: string;
@@ -43,9 +40,9 @@ export type DemoEvent = {
   training_run_id?: number | null;
   metadata?: Record<string, unknown> | null;
   created_at: string;
-};
+}
 
-export type DemoPhase = {
+export interface DemoPhase {
   phase_no: number;
   location_name: string;
   region_code: string;
@@ -55,59 +52,62 @@ export type DemoPhase = {
   command_id?: number | null;
   command_status?: string | null;
   training_run_id?: number | null;
+  resume_checkpoint_s3_uri?: string | null;
   output_checkpoint_s3_uri?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-};
+}
 
-export type LiveMetrics = {
+export interface LiveMetrics {
   command_id?: number | null;
   training_run_id?: number | null;
   current_status?: string | null;
   progress_percent?: number | null;
   epoch?: number | null;
   total_epochs?: number | null;
-  mAP50?: number | null;
+  map50?: number | null;
   precision?: number | null;
   recall?: number | null;
   message?: string | null;
   updated_at?: string | null;
-};
+}
 
-export type DemoState = {
-  demo_run_id?: number | null;
-  demo_name?: string | null;
+export interface FinalResult {
+  final_training_run_id?: number | null;
+  final_checkpoint_s3_uri?: string | null;
+  s3_best_model_uri?: string | null;
+}
+
+export interface DemoRunState {
+  demo_run_id: number;
+  demo_name: string;
   status: string;
-  setup_required: boolean;
-  warning?: string | null;
   overall_progress_percent: number;
-  current_phase?: {
-    phase_no: number;
-    location_name: string;
-    region_code: string;
-    target_percent: number;
-    status: string;
-    command_id?: number | null;
-    training_run_id?: number | null;
-  } | null;
+  requested_duration_seconds: number;
+  started_by?: string | null;
+  auth_subject?: string | null;
+  current_phase?: DemoPhase | null;
   phases: DemoPhase[];
   latest_metrics?: LiveMetrics | null;
-  latest_checkpoint_s3_uri?: string | null;
-  final_result: {
-    final_training_run_id?: number | null;
-    final_checkpoint_s3_uri?: string | null;
-    best_model_s3_uri?: string | null;
-  };
+  final_result: FinalResult;
   events: DemoEvent[];
-  created_at?: string | null;
+  error_message?: string | null;
+  created_at: string;
   started_at?: string | null;
   finished_at?: string | null;
-  updated_at?: string | null;
-};
+  updated_at: string;
+}
 
-export type StartDemoResponse = {
+export interface CurrentDemoResponse {
+  active: boolean;
+  latest: DemoRunState | null;
+  migration_required: boolean;
+}
+
+export interface DemoStartResponse {
   demo_run_id: number;
   status: string;
-  message: string;
-};
+}
 
+export interface ResetStaleResponse {
+  reset_runs: number;
+  reset_commands: number;
+}

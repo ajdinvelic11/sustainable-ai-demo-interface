@@ -1,99 +1,75 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
+from secrets import token_urlsafe
 from typing import Any
 
 import jwt
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Response
+from jwt import InvalidTokenError
 
 from app.config import Settings
-from app.schemas.auth import SessionUser
+from app.schemas.auth import AuthUser
 
 
-def create_session_token(settings: Settings, user_claims: dict[str, Any]) -> tuple[str, SessionUser]:
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=settings.session_ttl_minutes)
-    roles = sorted(set(str(role) for role in user_claims.get("roles", []) if role))
-    subject = str(user_claims.get("subject") or "unknown-subject")
-    issuer = user_claims.get("issuer")
-    is_admin = bool(user_claims.get("is_admin")) or subject in settings.app_admin_subjects
+ALGORITHM = "HS256"
 
-    payload = {
+
+def create_session(user: AuthUser, settings: Settings) -> tuple[str, str, datetime]:
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.app_session_ttl_minutes)
+    csrf_token = token_urlsafe(32)
+    payload: dict[str, Any] = {
+        "sub": user.subject,
         "iss": settings.app_jwt_issuer,
         "aud": settings.app_jwt_audience,
-        "sub": subject,
-        "name": user_claims.get("name"),
-        "email": user_claims.get("email"),
-        "roles": roles,
-        "is_admin": is_admin,
-        "auth_mode": user_claims.get("auth_mode", "vc-jwt"),
-        "external_issuer": issuer,
-        "iat": int(now.timestamp()),
-        "exp": int(expires_at.timestamp()),
+        "credential_issuer": user.issuer,
+        "credential_type": user.credential_type,
+        "is_admin": user.is_admin,
+        "auth_mode": user.auth_mode,
+        "csrf": csrf_token,
+        "exp": expires_at,
+        "iat": datetime.now(timezone.utc),
     }
-    token = jwt.encode(payload, settings.app_jwt_secret, algorithm="HS256")
-    return token, session_user_from_payload(payload, expires_at)
+    token = jwt.encode(payload, settings.app_jwt_secret, algorithm=ALGORITHM)
+    return token, csrf_token, expires_at
 
 
-def session_user_from_payload(payload: dict[str, Any], expires_at: datetime | None = None) -> SessionUser:
-    exp = expires_at
-    if exp is None:
-        exp_value = payload.get("exp")
-        exp = datetime.fromtimestamp(float(exp_value), tz=timezone.utc) if exp_value else datetime.now(timezone.utc)
-    return SessionUser(
-        subject=str(payload.get("sub")),
-        issuer=payload.get("external_issuer"),
-        name=payload.get("name"),
-        email=payload.get("email"),
-        roles=list(payload.get("roles") or []),
-        is_admin=bool(payload.get("is_admin")),
-        auth_mode=str(payload.get("auth_mode") or "vc-jwt"),
-        expires_at=exp,
-    )
-
-
-def decode_session_token(settings: Settings, token: str) -> SessionUser:
+def decode_session(token: str, settings: Settings) -> tuple[AuthUser, str] | None:
     try:
         payload = jwt.decode(
             token,
             settings.app_jwt_secret,
-            algorithms=["HS256"],
-            audience=settings.app_jwt_audience,
+            algorithms=[ALGORITHM],
             issuer=settings.app_jwt_issuer,
+            audience=settings.app_jwt_audience,
         )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session") from exc
-    return session_user_from_payload(payload)
+    except InvalidTokenError:
+        return None
+
+    user = AuthUser(
+        subject=str(payload.get("sub") or "unknown"),
+        issuer=str(payload.get("credential_issuer") or "unknown"),
+        credential_type=str(payload.get("credential_type") or "unknown"),
+        is_admin=bool(payload.get("is_admin")),
+        auth_mode=str(payload.get("auth_mode") or "validated"),
+    )
+    return user, str(payload.get("csrf") or "")
 
 
-def set_session_cookie(settings: Settings, response: Response, token: str) -> None:
+def set_session_cookie(response: Response, settings: Settings, token: str) -> None:
     response.set_cookie(
         key=settings.session_cookie_name,
         value=token,
-        max_age=settings.session_ttl_minutes * 60,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
+        max_age=settings.app_session_ttl_minutes * 60,
         path="/",
     )
 
 
-def clear_session_cookie(settings: Settings, response: Response) -> None:
-    response.delete_cookie(key=settings.session_cookie_name, path="/", samesite="lax")
-
-
-def current_user_from_request(settings: Settings, request: Request) -> SessionUser:
-    token = request.cookies.get(settings.session_cookie_name)
-    if not token:
-        authorization = request.headers.get("authorization", "")
-        if authorization.lower().startswith("bearer "):
-            token = authorization.split(" ", 1)[1].strip()
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    return decode_session_token(settings, token)
-
-
-def require_admin(user: SessionUser) -> None:
-    if not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
-
+def clear_session_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )

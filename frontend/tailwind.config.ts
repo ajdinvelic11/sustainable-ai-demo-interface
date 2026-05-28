@@ -5,25 +5,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: {
-          base: "#07111f",
-          raised: "#0c1728",
-          panel: "#101d31",
-          line: "#22324a"
-        },
-        signal: {
-          cyan: "#18d3ff",
-          blue: "#5aa7ff",
-          green: "#54e38e",
-          amber: "#f6c453",
-          red: "#ff5d73"
-        }
+        panel: "#0f172a",
+        "panel-soft": "#111c33",
+        "line-soft": "rgba(148, 163, 184, 0.18)",
       },
       boxShadow: {
-        panel: "0 20px 70px rgba(0, 0, 0, 0.35)"
-      }
-    }
+        glow: "0 0 40px rgba(34, 211, 238, 0.12)",
+      },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 } satisfies Config;
-

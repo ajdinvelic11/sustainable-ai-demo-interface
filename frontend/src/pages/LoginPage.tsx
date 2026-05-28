@@ -1,100 +1,141 @@
-import { FormEvent, useState } from "react";
-import { KeyRound, Loader2, ShieldCheck, TerminalSquare } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import type { AuthConfig } from "../types/api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, BrainCircuit, Loader2, LockKeyhole, RadioTower, ShieldCheck } from "lucide-react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
-type LoginPageProps = {
-  authConfig: AuthConfig | null;
-  onLogin: (token: string) => Promise<void>;
-};
+import { ApiError } from "../api/client";
+import { useAuth } from "../context/AuthContext";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
 
-export function LoginPage({ authConfig, onLogin }: LoginPageProps) {
+const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+export default function LoginPage() {
+  const { authenticated, loading, login, config } = useAuth();
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = useMemo(() => {
+    const state = location.state as { from?: { pathname?: string } } | null;
+    return state?.from?.pathname || "/";
+  }, [location.state]);
 
-  const submit = async (event: FormEvent) => {
+  useEffect(() => {
+    if (!loading && authenticated) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [authenticated, loading, navigate, redirectTo]);
+
+  if (!loading && authenticated) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    setStatus(null);
-    setLoading(true);
+    const trimmed = token.trim();
+    if (!trimmed) {
+      setError("Paste a JWT / VC-JWT token to continue.");
+      return;
+    }
+    if (!JWT_RE.test(trimmed)) {
+      setError("The token must have three JWT segments separated by dots.");
+      return;
+    }
+    setVerifying(true);
     try {
-      await onLogin(token);
-      setStatus("Token verified. Session created.");
+      await login(trimmed);
+      setToken("");
+      navigate(redirectTo, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Token verification failed.");
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Authentication failed.");
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-surface-base px-4 py-8 text-slate-100">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center">
-        <div className="grid w-full gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <section className="flex flex-col justify-center">
-            <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg border border-signal-cyan/40 bg-signal-cyan/12 text-signal-cyan">
-              <ShieldCheck size={26} />
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.16),transparent_34%),#020617]">
+      <main className="mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-6 py-12 lg:grid-cols-[0.9fr_1.1fr]">
+        <section>
+          <div className="mb-8 flex items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-400 text-slate-950">
+              <BrainCircuit className="h-6 w-6" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-white">Sustainable AI Demo Interface</div>
+              <div className="text-xs text-slate-400">Credential-gated training control</div>
             </div>
-            <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white sm:text-5xl">Sustainable AI Demo Interface</h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-slate-300">
-              Multi-site AI training with checkpoint transfer across Wiener Neustadt, Wien and Eisenstadt.
-            </p>
-            <div className="mt-8 grid gap-3 text-sm text-slate-300">
-              <div className="flex items-center gap-3">
-                <TerminalSquare size={18} className="text-signal-green" />
-                PostgreSQL-coordinated training commands
+          </div>
+
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            VC-JWT validation
+          </div>
+          <h1 className="mt-6 max-w-3xl text-5xl font-semibold tracking-normal text-white lg:text-6xl">
+            Secure control room for a multi-site Sustainable AI demo
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+            Log in with a JWT / VC-JWT, start the five-minute training chain, and monitor checkpoint transfer across Wiener Neustadt, Wien and Eisenstadt.
+          </p>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            {["No password-based access", "Compliance validation", "HttpOnly app session"].map((item) => (
+              <div key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm font-semibold text-slate-200">
+                {item}
               </div>
-              <div className="flex items-center gap-3">
-                <TerminalSquare size={18} className="text-signal-blue" />
-                S3 checkpoint transfer and result tracking
+            ))}
+          </div>
+        </section>
+
+        <Card className="p-7 lg:p-8">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-cyan-300">
+                <LockKeyhole className="h-6 w-6" />
               </div>
+              <h2 className="mt-5 text-2xl font-semibold text-white">Verify & Login</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Paste a Gaia-X compatible VC-JWT or a JWT accepted by your configured validation service.
+              </p>
             </div>
-          </section>
+            {config?.mock_mode && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200">
+                <RadioTower className="h-3.5 w-3.5" />
+                Demo Auth Mode
+              </span>
+            )}
+          </div>
 
-          <Card className="p-6">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Secure login</h2>
-                <p className="mt-1 text-sm text-slate-400">Paste a JWT / VC-JWT token for validation.</p>
-              </div>
-              {authConfig?.mock_mode && (
-                <span className="rounded-full border border-amber-400/40 bg-amber-400/12 px-3 py-1 text-xs font-semibold text-amber-200">
-                  Demo Auth Mode
-                </span>
-              )}
+          {error && (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-none" />
+              <span>{error}</span>
             </div>
+          )}
 
-            <form onSubmit={submit} className="grid gap-4">
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-200">JWT / VC-JWT token</span>
-                <textarea
-                  value={token}
-                  onChange={(event) => setToken(event.target.value)}
-                  className="min-h-56 w-full resize-y rounded-md border border-surface-line bg-slate-950/70 p-4 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/20"
-                  placeholder="eyJhbGciOi..."
-                  spellCheck={false}
-                />
-              </label>
-
-              {error && <div className="rounded-md border border-red-400/40 bg-red-500/12 p-3 text-sm text-red-100">{error}</div>}
-              {status && <div className="rounded-md border border-emerald-400/40 bg-emerald-400/12 p-3 text-sm text-emerald-100">{status}</div>}
-              {!authConfig?.validation_url_configured && !authConfig?.mock_mode && (
-                <div className="rounded-md border border-amber-400/40 bg-amber-400/12 p-3 text-sm text-amber-100">
-                  VC-JWT validation URL is not fully configured.
-                </div>
-              )}
-
-              <Button type="submit" disabled={loading || token.trim().length < 16} icon={loading ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />}>
-                Verify & Login
-              </Button>
-            </form>
-          </Card>
-        </div>
-      </div>
-    </main>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <label>
+              <span className="mb-2 block text-sm font-medium text-slate-300">JWT / VC-JWT token</span>
+              <textarea
+                className="control-input min-h-60 resize-y font-mono text-xs leading-5"
+                spellCheck={false}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder="Paste token here"
+              />
+            </label>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm leading-6 text-slate-400">
+              The raw token is sent only to the backend for verification. The browser receives a short-lived application session through an HttpOnly cookie.
+            </div>
+            <Button className="w-full" disabled={verifying}>
+              {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Verify & Login
+            </Button>
+          </form>
+        </Card>
+      </main>
+    </div>
   );
 }
-
